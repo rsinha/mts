@@ -1,0 +1,44 @@
+[package]
+name = "multiverse-signatures"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+authors = [ "sinharo@gmail.com" ]
+repository = "https://github.com/rsinha/multiverse-signatures"
+readme = "README.md"
+description = "multiverse threshold signature scheme"
+categories = ["cryptography"]
+keywords = ["threshold", "signature", "cryptography"]
+
+[profile.bench]
+debug = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+
+[dependencies]
+pairing = "0.21.0"
+thiserror = "1.0.26"
+rand = { version = "0.8.4" }
+serde = { version = "1.0.136", features = ["derive"] }
+bls12_381 = { git = "https://github.com/civicrypt/bls12_381", features = ["experimental"] }
+ff = "0.11"
+itertools = "0.10.3"
+sha2 = "0.9"
+rand_seeder = "0.2.3"
+aes = "0.8.1"
+
+[dev-dependencies]
+rand = { version = "0.8.4", features = ["small_rng"] }
+lazy_static = "1.4.0"
+criterion = { version = "0.3.4", features = ["html_reports"] }
+pprof = { version = "0.6", features = ["flamegraph"] }
+bincode = "1.3.3"
+
+[[bench]]
+name = "poly_arithmetic"
+harness = false
+
+[profile.test]
+opt-level = 2

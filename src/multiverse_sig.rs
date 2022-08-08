@@ -13,6 +13,7 @@ use crate::utils;
 pub type PartyId = usize;
 pub type XCoord = usize;
 pub type Weight = usize;
+pub type MultiDKGPartialSig = Vec<G2Projective>;
 
 /// given a mapping from party id to weights, this function constructs
 /// a mapping from party id to private ranges
@@ -85,7 +86,7 @@ pub struct MultiDKGOutput {
 
 //#[derive(Debug, Clone)]
 pub struct MultiDKGParty {
-    party_id: PartyId,
+    //party_id: PartyId,
     threshold_weight: Weight,
     total_weight: Weight,
     crs: KZGParams,
@@ -104,7 +105,7 @@ impl <'a> MultiDKGParty {
 
     pub fn new(
         crs: KZGParams,
-        party_id: usize,
+        //party_id: usize,
         threshold_weight: usize,
         total_weight: usize,
         addr_book: &BTreeMap<PartyId, Weight>) -> MultiDKGParty {
@@ -112,7 +113,7 @@ impl <'a> MultiDKGParty {
         let mut rng = thread_rng();
 
         MultiDKGParty {
-            party_id: party_id,
+            //party_id: party_id,
             threshold_weight: threshold_weight,
             total_weight: total_weight,
             crs: crs,
@@ -156,14 +157,14 @@ impl <'a> MultiDKGParty {
         }
     }
 
-    pub fn sign(&self, msg: &[u8], output: &MultiDKGOutput) -> Vec<G2Projective> {
+    pub fn sign(&self, msg: &[u8], output: &MultiDKGOutput) -> MultiDKGPartialSig {
         let h_m = utils::hash_to_g2(msg);
         let ys = &output.private_shares[0..self.threshold_weight];
         ys.iter().map(|y| h_m.mul(y)).collect()
 
     }
 
-    pub fn aggregate(&self, output: &MultiDKGOutput, partial_sigs: &Vec<G2Projective>) -> MultiDKGSig {
+    pub fn aggregate(&self, output: &MultiDKGOutput, partial_sigs: &MultiDKGPartialSig) -> MultiDKGSig {
         let t = self.threshold_weight;
         let xs: Vec<XCoord> = (1..t+1).collect();
         let mut xss: Vec<Scalar> = xs.iter().map(|&x| Scalar::from(x as u64)).collect();
@@ -199,9 +200,9 @@ impl <'a> MultiDKGParty {
     }
 }
 
-mod multiverse_sig_utils {
+pub mod multiverse_sig_utils {
     use super::*;
-    use rand::{thread_rng, Rng, rngs::ThreadRng};
+    use rand::{Rng, rngs::ThreadRng};
 
     pub fn create_addr_book(num_parties: usize, k: usize) -> BTreeMap<PartyId, Weight> {
         let mut ab : BTreeMap<PartyId, Weight> = BTreeMap::new();
@@ -217,9 +218,10 @@ mod multiverse_sig_utils {
     }
 }
 
+/*
 pub mod perf {
     use super::*;
-    use rand::{thread_rng, Rng, rngs::ThreadRng};
+    use rand::{thread_rng};
     use std::time::{Instant};
 
     pub fn test_performance_multisig(num_parties: usize, individual_weight: usize, threshold: f64) {
@@ -235,11 +237,7 @@ pub mod perf {
         let crs = super::multiverse_sig_utils::test_setup::<65000>(&mut rng);
         let addr_book = super::multiverse_sig_utils::create_addr_book(num_parties, individual_weight);
 
-        let dealer = MultiDKGParty::new(crs,
-            0,
-            weight_threshold,
-            total_weight,
-            &addr_book);
+        let dealer = MultiDKGParty::new(crs, weight_threshold, total_weight, &addr_book);
 
         let output = dealer.setup();
 
@@ -280,12 +278,12 @@ pub mod perf {
         }
     }
 }
+*/
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use rand::{thread_rng, Rng, rngs::ThreadRng};
-    use std::time::{Instant};
+    use rand::{thread_rng};
 
     #[test]
     fn test_correctness_multisig() {
@@ -297,39 +295,18 @@ pub mod tests {
         let total_weight = individual_weight * num_parties;
         let weight_threshold = ((total_weight as f64) * threshold) as usize;
 
-        println!("Experiment with n = {}, k = {}, W = {}, T = {}",
-            num_parties, individual_weight, total_weight, weight_threshold);
-
         let mut rng = thread_rng();
 
         let crs = super::multiverse_sig_utils::test_setup::<1000>(&mut rng);
         let addr_book = super::multiverse_sig_utils::create_addr_book(num_parties, individual_weight);
 
-        let dealer = MultiDKGParty::new(crs,
-            0,
-            weight_threshold,
-            total_weight,
-            &addr_book);
+        let dealer = MultiDKGParty::new(crs, weight_threshold, total_weight, &addr_book);
 
         let output = dealer.setup();
 
         let msg_to_sign = "Hello";
-
-        let start = Instant::now();
         let partial_sigs = dealer.sign(msg_to_sign.as_bytes(), &output);
-        let signing_duration = start.elapsed();
-        let signing_duration_per_party =
-            (signing_duration * (individual_weight as u32)) / (weight_threshold as u32);
-
-        println!("Time elapsed in signing is {} shares: {:?}",
-            individual_weight, signing_duration_per_party);
-
-        let start = Instant::now();
         let aggregate_sig = dealer.aggregate(&output, &partial_sigs);
-        println!("Time elapsed in aggregation is: {:?}", start.elapsed());
-
-        let start = Instant::now();
         assert_eq!(dealer.verify(msg_to_sign.as_bytes(), &output, &aggregate_sig), true);
-        println!("Time elapsed in verification is: {:?}", start.elapsed());
     }
 }

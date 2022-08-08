@@ -1,6 +1,5 @@
 use multiverse_signatures::multiverse_sig::{multiverse_sig_utils, *};
 use rand::{thread_rng};
-use std::time::Duration;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
@@ -58,7 +57,11 @@ mod perf;
 
 criterion_group!(
     name = multiverse_sig;
-    config = Criterion::default().with_profiler(perf::FlamegraphProfiler::new(5));
-    targets = bench_multiverse_sig<50,10>, bench_multiverse_sig<100,10>
+    config = Criterion::default().
+        with_profiler(perf::FlamegraphProfiler::new(5)).
+        sample_size(10);
+    targets = bench_multiverse_sig<50,10>, 
+        bench_multiverse_sig<100,10>,
+        bench_multiverse_sig<200,10>
 );
 criterion_main!(multiverse_sig);

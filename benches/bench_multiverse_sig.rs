@@ -6,7 +6,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 //N denotes number of parties, K denotes weight per party, and T denotes threshold ratio
 fn bench_multiverse_sig<const N: usize, const K: usize>(c: &mut Criterion) {
 
-    let threshold : f64 = 0.34;
+    let threshold : f64 = 0.5;
     let total_weight = K * N;
     let weight_threshold = ((total_weight as f64) * threshold) as usize;
 
@@ -26,7 +26,7 @@ fn bench_multiverse_sig<const N: usize, const K: usize>(c: &mut Criterion) {
         format!("bench_sign<N={},K={}>", N, K).as_str(),
         |b| {
             b.iter(|| dealer.sign(
-                black_box(msg_to_sign.as_bytes()), 
+                black_box(msg_to_sign.as_bytes()),
                 black_box(&output)));
         },
     );
@@ -36,7 +36,7 @@ fn bench_multiverse_sig<const N: usize, const K: usize>(c: &mut Criterion) {
         format!("bench_aggregate<N={},K={}>", N, K).as_str(),
         |b| {
             b.iter(|| dealer.aggregate(
-                black_box(&output), 
+                black_box(&output),
                 black_box(&partial_sigs)));
         },
     );
@@ -46,8 +46,8 @@ fn bench_multiverse_sig<const N: usize, const K: usize>(c: &mut Criterion) {
         format!("bench_verify<N={},K={}>", N, K).as_str(),
         |b| {
             b.iter(|| dealer.verify(
-                black_box(msg_to_sign.as_bytes()), 
-                black_box(&output), 
+                black_box(msg_to_sign.as_bytes()),
+                black_box(&output),
                 black_box(&aggregate_sig)));
         },
     );
@@ -60,7 +60,7 @@ criterion_group!(
     config = Criterion::default().
         with_profiler(perf::FlamegraphProfiler::new(5)).
         sample_size(10);
-    targets = bench_multiverse_sig<50,10>, 
+    targets = bench_multiverse_sig<50,10>,
         bench_multiverse_sig<100,10>,
         bench_multiverse_sig<200,10>
 );

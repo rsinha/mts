@@ -156,32 +156,56 @@ impl <'a> MultiDKGParty {
         let h_m = utils::hash_to_g2(msg);
 
         let (lo,hi) = &self.addr_book_ranges.get(&id).unwrap();
-        let xs = (lo..(hi+1)).map(|x| Scalar::from(x as u64)).collect();
-        let ys = &output.private_shares[lo-1..hi];
-        let sigs = ys.iter().map(|y| h_m.mul(y)).collect();
+        let xs: Vec<XCoord> = (*lo..(*hi + 1)).collect();
+        let ys = &output.private_shares[*lo-1..*hi];
 
-        xs.iter().zip(sigs.iter()).map(|x,y| (x,y)).collect()
+        xs.iter().zip(ys.iter()).map(|(x,y)| (*x, h_m.mul(y))).collect()
     }
 
-    pub fn aggregate(&self, output: &MultiDKGOutput, partial_sigs: &MultiDKGPartialSig) -> MultiDKGSig {
+    pub fn aggregate(&self, output: &MultiDKGOutput, partial_sigs: &[MultiDKGPartialSig]) -> Option<MultiDKGSig> {
         let t = self.threshold_weight;
-        let xs: Vec<XCoord> = (1..t+1).collect();
-        let mut xss: Vec<Scalar> = xs.iter().map(|&x| Scalar::from(x as u64)).collect();
 
-        let mut points: Vec<Scalar> = aggregator_xs(self.total_weight, self.threshold_weight);
-        xss.append(&mut points);
+        let mut all_sigs: BTreeMap<XCoord, G2Projective> = BTreeMap::new();
+        for partial_sig in partial_sigs.iter() {
+            for (x,y) in partial_sig.iter() {
+                all_sigs.insert(x.clone(), y.clone());
+            }
+        }
 
-        let coeffs: Vec<Scalar> = Polynomial::lagrange_coefficients(xss.as_slice());
+        if all_sigs.len() < t {
+            return None;
+        }
 
-        let sigma_prime = utils::multi_exp_g2_fast(partial_sigs.as_slice(), &coeffs.as_slice()[0..t]);
+        let mut all_xs: Vec<Scalar> = all_sigs.
+            keys().
+            into_iter().
+            take(t).
+            into_iter().
+            map(|x| Scalar::from(*x as u64)).
+            collect();
+
+        let mut agg_xs: Vec<Scalar> = aggregator_xs(self.total_weight, self.threshold_weight);
+        all_xs.append(&mut agg_xs);
+
+        let coeffs: Vec<Scalar> = Polynomial::lagrange_coefficients(all_xs.as_slice());
+
+        let signer_ys: Vec<G2Projective> = all_sigs.
+            values().
+            into_iter().
+            take(t).
+            into_iter().
+            map(|y| y.clone()).
+            collect();
+
+        let sigma_prime = utils::multi_exp_g2_fast(signer_ys.as_slice(), &coeffs.as_slice()[0..t]);
         let sigma_0 = utils::multi_exp_g1_fast(output.coms.as_slice(), &coeffs.as_slice()[t..]);
         let sigma_1 = utils::multi_exp_g1_fast(output.coms_exp_k.as_slice(), &coeffs.as_slice()[t..]);
 
-        MultiDKGSig {
+        Some(MultiDKGSig {
             sigma_prime: sigma_prime,
             sigma_0: sigma_0,
             sigma_1: sigma_1
-        }
+        })
     }
 
     pub fn verify(&self, msg: &[u8], output: &MultiDKGOutput, sig: &MultiDKGSig) -> bool {
@@ -241,9 +265,15 @@ pub mod tests {
 
         let output = dealer.setup();
 
-        let msg_to_sign = "Hello";
-        let partial_sigs = dealer.sign(msg_to_sign.as_bytes(), &output);
-        let aggregate_sig = dealer.aggregate(&output, &partial_sigs);
+        let msg_to_sign = "Hello Multiverse";
+
+        //let's collect signatures from 80 out of 100 parties
+        let mut partial_sigs: Vec<MultiDKGPartialSig> = Vec::new();
+        for id in 1..80 {
+            partial_sigs.push(dealer.sign(id, msg_to_sign.as_bytes(), &output));
+        }
+
+        let aggregate_sig = dealer.aggregate(&output, &partial_sigs).unwrap();
         assert_eq!(dealer.verify(msg_to_sign.as_bytes(), &output, &aggregate_sig), true);
     }
 }

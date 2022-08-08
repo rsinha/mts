@@ -13,7 +13,7 @@ use crate::utils;
 pub type PartyId = usize;
 pub type XCoord = usize;
 pub type Weight = usize;
-pub type MultiDKGPartialSig = Vec<G2Projective>;
+pub type MultiDKGPartialSig = Vec<(XCoord, G2Projective)>;
 
 /// given a mapping from party id to weights, this function constructs
 /// a mapping from party id to private ranges
@@ -76,7 +76,6 @@ fn commit_g2(params: &KZGParams, value: &Scalar) -> G2Projective {
 
 #[derive(Clone)]
 pub struct MultiDKGOutput {
-    pub party_id: usize,
     pub coms: Vec<G1Projective>,
     pub coms_exp_k: Vec<G1Projective>,
     pub private_shares: Vec<Scalar>,
@@ -86,13 +85,12 @@ pub struct MultiDKGOutput {
 
 //#[derive(Debug, Clone)]
 pub struct MultiDKGParty {
-    //party_id: PartyId,
     threshold_weight: Weight,
     total_weight: Weight,
     crs: KZGParams,
     k: Scalar,
     secret_polynomial: Polynomial,
-    _addr_book_ranges: BTreeMap<PartyId, (XCoord, XCoord)>
+    addr_book_ranges: BTreeMap<PartyId, (XCoord, XCoord)>
 }
 
 pub struct MultiDKGSig {
@@ -105,7 +103,6 @@ impl <'a> MultiDKGParty {
 
     pub fn new(
         crs: KZGParams,
-        //party_id: usize,
         threshold_weight: usize,
         total_weight: usize,
         addr_book: &BTreeMap<PartyId, Weight>) -> MultiDKGParty {
@@ -113,13 +110,12 @@ impl <'a> MultiDKGParty {
         let mut rng = thread_rng();
 
         MultiDKGParty {
-            //party_id: party_id,
             threshold_weight: threshold_weight,
             total_weight: total_weight,
             crs: crs,
             k: Scalar::random(&mut rng),
             secret_polynomial: sample_random_poly(&mut rng, total_weight - 1),
-            _addr_book_ranges: addr_book_to_private_xs_ranges(addr_book)
+            addr_book_ranges: addr_book_to_private_xs_ranges(addr_book)
         }
     }
 
@@ -148,7 +144,6 @@ impl <'a> MultiDKGParty {
         let g2_k = commit_g2(&self.crs, &self.k);
 
         MultiDKGOutput {
-            party_id: 0,
             coms: coms_g1,
             coms_exp_k: coms_k_g1,
             private_shares: private_shares,
@@ -157,11 +152,15 @@ impl <'a> MultiDKGParty {
         }
     }
 
-    pub fn sign(&self, msg: &[u8], output: &MultiDKGOutput) -> MultiDKGPartialSig {
+    pub fn sign(&self, id: PartyId, msg: &[u8], output: &MultiDKGOutput) -> MultiDKGPartialSig {
         let h_m = utils::hash_to_g2(msg);
-        let ys = &output.private_shares[0..self.threshold_weight];
-        ys.iter().map(|y| h_m.mul(y)).collect()
 
+        let (lo,hi) = &self.addr_book_ranges.get(&id).unwrap();
+        let xs = (lo..(hi+1)).map(|x| Scalar::from(x as u64)).collect();
+        let ys = &output.private_shares[lo-1..hi];
+        let sigs = ys.iter().map(|y| h_m.mul(y)).collect();
+
+        xs.iter().zip(sigs.iter()).map(|x,y| (x,y)).collect()
     }
 
     pub fn aggregate(&self, output: &MultiDKGOutput, partial_sigs: &MultiDKGPartialSig) -> MultiDKGSig {

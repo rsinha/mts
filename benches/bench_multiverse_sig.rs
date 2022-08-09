@@ -1,4 +1,4 @@
-use multiverse_signatures::multiverse_sig::{multiverse_sig_utils, *};
+use multiverse_signatures::{common::sig_utils, multiverse_sig::*};
 use rand::{thread_rng};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
@@ -12,17 +12,17 @@ fn bench_multiverse_sig<const N: usize, const K: usize>(c: &mut Criterion) {
 
     let mut rng = thread_rng();
 
-    let crs = multiverse_sig_utils::test_setup::<1000>(&mut rng);
-    let addr_book = multiverse_sig_utils::create_addr_book(N, K);
+    let crs = sig_utils::test_setup::<1000>(&mut rng);
+    let addr_book = sig_utils::create_addr_book(N, K);
 
-    let dealer = MultiDKGParty::new(crs, weight_threshold, total_weight, &addr_book);
+    let dealer = MultiverseParty::new(crs, weight_threshold, total_weight, &addr_book);
 
     let output = dealer.setup();
 
     let msg_to_sign = "Hello Multiverse";
 
     //let's collect signatures from 80 out of 100 parties
-    let mut partial_sigs: Vec<MultiDKGPartialSig> = Vec::new();
+    let mut partial_sigs: Vec<MultiversePartialSig> = Vec::new();
     for id in 1..(2*N/3) {
         partial_sigs.push(dealer.sign(id, msg_to_sign.as_bytes(), &output));
     }

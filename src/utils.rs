@@ -104,6 +104,14 @@ pub fn hash_to_g2(msg: &[u8]) -> G2Projective {
     <G2Projective as HashToCurve<ExpandMsgXmd<sha2::Sha256>>>::hash_to_curve(msg, DOMAIN_G2)
 }
 
+pub fn commit_in_g1(generator: &G1Projective, value: &Scalar) -> G1Projective {
+    generator.mul(value)
+}
+
+pub fn commit_in_g2(generator: &G2Projective, value: &Scalar) -> G2Projective {
+    generator.mul(value)
+}
+
 pub fn convert_gt_to_256_bit_hash(point: &Gt) -> [u8; 32] {
     let mut hasher = Sha256::new();
     // write input message

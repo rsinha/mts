@@ -21,17 +21,23 @@ fn bench_multiverse_sig<const N: usize, const K: usize>(c: &mut Criterion) {
 
     let msg_to_sign = "Hello Multiverse";
 
-    let partial_sigs = dealer.sign(msg_to_sign.as_bytes(), &output);
+    //let's collect signatures from 80 out of 100 parties
+    let mut partial_sigs: Vec<MultiDKGPartialSig> = Vec::new();
+    for id in 1..(2*N/3) {
+        partial_sigs.push(dealer.sign(id, msg_to_sign.as_bytes(), &output));
+    }
+
     c.bench_function(
         format!("bench_sign<N={},K={}>", N, K).as_str(),
         |b| {
             b.iter(|| dealer.sign(
+                black_box(1),
                 black_box(msg_to_sign.as_bytes()),
                 black_box(&output)));
         },
     );
 
-    let aggregate_sig = dealer.aggregate(&output, &partial_sigs);
+    let aggregate_sig = dealer.aggregate(&output, &partial_sigs).unwrap();
     c.bench_function(
         format!("bench_aggregate<N={},K={}>", N, K).as_str(),
         |b| {

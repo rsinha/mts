@@ -4,7 +4,7 @@ use pairing::group::{Curve};
 use ff::*;
 use rand::{thread_rng};
 use std::collections::{BTreeMap};
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Neg};
 
 use crate::polynomial::*;
 use crate::kzg::*;
@@ -13,6 +13,7 @@ use crate::common::sig_utils;
 use crate::{XCoord, PartyId, Weight};
 
 pub type MultiversePartialSig = Vec<(XCoord, G2Projective)>;
+pub type MultiverseParams = KZGParams;
 
 fn aggregator_xs(total_weight: Weight, threshold: Weight) -> Vec<Scalar> {
     let lo = total_weight + 1;
@@ -121,6 +122,63 @@ impl <'a> MultiverseParty {
         xs.iter().zip(ys.iter()).map(|(x,y)| (*x, h_m.mul(y))).collect()
     }
 
+    pub fn compute_lagrange_coeffs(&self, output: &MultiversePublicParams, partial_sigs: &[MultiversePartialSig]) -> Option<Vec<Scalar>> {
+        let t = self.threshold_weight;
+
+        let mut all_sigs: BTreeMap<XCoord, G2Projective> = BTreeMap::new();
+        for partial_sig in partial_sigs.iter() {
+            for (x,y) in partial_sig.iter() {
+                all_sigs.insert(x.clone(), y.clone());
+            }
+        }
+
+        if all_sigs.len() < t {
+            return None;
+        }
+
+        let mut all_xs: Vec<Scalar> = all_sigs.
+            keys().
+            into_iter().
+            take(t).
+            into_iter().
+            map(|x| Scalar::from(*x as u64)).
+            collect();
+
+        let mut agg_xs: Vec<Scalar> = aggregator_xs(self.total_weight, self.threshold_weight);
+        all_xs.append(&mut agg_xs);
+
+        Some(Polynomial::lagrange_coefficients(all_xs.as_slice()))
+    }
+
+    pub fn aggregate_with_coeffs(&self, output: &MultiversePublicParams, partial_sigs: &[MultiversePartialSig], coeffs: &Vec<Scalar>) -> Option<MultiverseSig> {
+        let t = self.threshold_weight;
+
+        let mut all_sigs: BTreeMap<XCoord, G2Projective> = BTreeMap::new();
+        for partial_sig in partial_sigs.iter() {
+            for (x,y) in partial_sig.iter() {
+                all_sigs.insert(x.clone(), y.clone());
+            }
+        }
+
+        let signer_ys: Vec<G2Projective> = all_sigs.
+            values().
+            into_iter().
+            take(t).
+            into_iter().
+            map(|y| y.clone()).
+            collect();
+
+        let sigma_prime = utils::multi_exp_g2_fast(signer_ys.as_slice(), &coeffs.as_slice()[0..t]);
+        let sigma_0 = utils::multi_exp_g1_fast(output.coms.as_slice(), &coeffs.as_slice()[t..]);
+        let sigma_1 = utils::multi_exp_g1_fast(output.coms_exp_k.as_slice(), &coeffs.as_slice()[t..]);
+
+        Some(MultiverseSig {
+            sigma_prime: sigma_prime,
+            sigma_0: sigma_0,
+            sigma_1: sigma_1
+        })
+    }
+
     pub fn aggregate(&self, output: &MultiversePublicParams, partial_sigs: &[MultiversePartialSig]) -> Option<MultiverseSig> {
         let t = self.threshold_weight;
 
@@ -170,10 +228,8 @@ impl <'a> MultiverseParty {
     pub fn verify(&self, msg: &[u8], output: &MultiversePublicParams, sig: &MultiverseSig) -> bool {
         let h_m = utils::hash_to_g2(msg);
 
-        let check1_lhs = pairing(&output.public_key_s.to_affine(), &h_m.to_affine());
-        let check1_rhs_1 = pairing(&self.crs.gs[0].to_affine(), &sig.sigma_prime.to_affine(), );
-        let check1_rhs_2 = pairing(&sig.sigma_0.to_affine(), &h_m.to_affine(),);
-        let check1_rhs = check1_rhs_1.add(check1_rhs_2);
+        let check1_lhs = pairing(&output.public_key_s.add(&sig.sigma_0.neg()).to_affine(), &h_m.to_affine());
+        let check1_rhs = pairing(&self.crs.gs[0].to_affine(), &sig.sigma_prime.to_affine());
 
         let check2_lhs = pairing(&sig.sigma_1.to_affine(), &self.crs.hs[0].to_affine());
         let check2_rhs = pairing(&sig.sigma_0.to_affine(), &output.public_key_k.to_affine());

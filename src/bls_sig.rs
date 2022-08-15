@@ -12,6 +12,7 @@ use crate::common::sig_utils;
 use crate::{XCoord, PartyId, Weight};
 
 pub type BlsPartialSig = Vec<(XCoord, G2Projective)>;
+pub type BlsParams = KZGParams;
 
 fn signer_xs(total_weight: Weight, _threshold: Weight) -> Vec<Scalar> {
     //lo and hi are inclusiv

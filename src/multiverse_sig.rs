@@ -244,12 +244,13 @@ pub mod tests {
     use super::*;
     use crate::common::sig_utils;
     use rand::{thread_rng};
+    use std::time::{Duration, Instant};
 
     #[test]
     fn test_correctness_multiverse_sig() {
 
-        let num_parties: usize = 20;
-        let individual_weight: usize = 8;
+        let num_parties: usize = 200;
+        let individual_weight: usize = 25;
         let threshold: f64 = 0.5;
 
         let total_weight = individual_weight * num_parties;
@@ -257,7 +258,7 @@ pub mod tests {
 
         let mut rng = thread_rng();
 
-        let crs = sig_utils::test_setup::<200>(&mut rng);
+        let crs = sig_utils::test_setup::<50000>(&mut rng);
         let addr_book = sig_utils::create_addr_book(num_parties, individual_weight);
 
         let dealer = MultiverseParty::new(crs, weight_threshold, total_weight, &addr_book);
@@ -272,7 +273,9 @@ pub mod tests {
             partial_sigs.push(dealer.sign(id, msg_to_sign.as_bytes(), &output));
         }
 
+        let now = Instant::now();
         let aggregate_sig = dealer.aggregate(&output, &partial_sigs).unwrap();
+        println!("{}", now.elapsed().as_secs());
         assert_eq!(dealer.verify(msg_to_sign.as_bytes(), &output, &aggregate_sig), true);
     }
 }

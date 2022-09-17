@@ -61,6 +61,7 @@ pub struct MultiverseSig {
 
 impl <'a> MultiverseParty {
 
+    /* TODO: compute total weight from the addr book, and let the caller specify the threshold as a fraction */
     pub fn new(
         crs: KZGParams,
         threshold_weight: usize,
@@ -122,63 +123,6 @@ impl <'a> MultiverseParty {
         xs.iter().zip(ys.iter()).map(|(x,y)| (*x, h_m.mul(y))).collect()
     }
 
-    pub fn compute_lagrange_coeffs(&self, output: &MultiversePublicParams, partial_sigs: &[MultiversePartialSig]) -> Option<Vec<Scalar>> {
-        let t = self.threshold_weight;
-
-        let mut all_sigs: BTreeMap<XCoord, G2Projective> = BTreeMap::new();
-        for partial_sig in partial_sigs.iter() {
-            for (x,y) in partial_sig.iter() {
-                all_sigs.insert(x.clone(), y.clone());
-            }
-        }
-
-        if all_sigs.len() < t {
-            return None;
-        }
-
-        let mut all_xs: Vec<Scalar> = all_sigs.
-            keys().
-            into_iter().
-            take(t).
-            into_iter().
-            map(|x| Scalar::from(*x as u64)).
-            collect();
-
-        let mut agg_xs: Vec<Scalar> = aggregator_xs(self.total_weight, self.threshold_weight);
-        all_xs.append(&mut agg_xs);
-
-        Some(Polynomial::lagrange_coefficients(all_xs.as_slice()))
-    }
-
-    pub fn aggregate_with_coeffs(&self, output: &MultiversePublicParams, partial_sigs: &[MultiversePartialSig], coeffs: &Vec<Scalar>) -> Option<MultiverseSig> {
-        let t = self.threshold_weight;
-
-        let mut all_sigs: BTreeMap<XCoord, G2Projective> = BTreeMap::new();
-        for partial_sig in partial_sigs.iter() {
-            for (x,y) in partial_sig.iter() {
-                all_sigs.insert(x.clone(), y.clone());
-            }
-        }
-
-        let signer_ys: Vec<G2Projective> = all_sigs.
-            values().
-            into_iter().
-            take(t).
-            into_iter().
-            map(|y| y.clone()).
-            collect();
-
-        let sigma_prime = utils::multi_exp_g2_fast(signer_ys.as_slice(), &coeffs.as_slice()[0..t]);
-        let sigma_0 = utils::multi_exp_g1_fast(output.coms.as_slice(), &coeffs.as_slice()[t..]);
-        let sigma_1 = utils::multi_exp_g1_fast(output.coms_exp_k.as_slice(), &coeffs.as_slice()[t..]);
-
-        Some(MultiverseSig {
-            sigma_prime: sigma_prime,
-            sigma_0: sigma_0,
-            sigma_1: sigma_1
-        })
-    }
-
     pub fn aggregate(&self, output: &MultiversePublicParams, partial_sigs: &[MultiversePartialSig]) -> Option<MultiverseSig> {
         let t = self.threshold_weight;
 
@@ -214,9 +158,12 @@ impl <'a> MultiverseParty {
             map(|y| y.clone()).
             collect();
 
+        //let now = Instant::now();
         let sigma_prime = utils::multi_exp_g2_fast(signer_ys.as_slice(), &coeffs.as_slice()[0..t]);
         let sigma_0 = utils::multi_exp_g1_fast(output.coms.as_slice(), &coeffs.as_slice()[t..]);
         let sigma_1 = utils::multi_exp_g1_fast(output.coms_exp_k.as_slice(), &coeffs.as_slice()[t..]);
+        //let duration = now.elapsed();
+        //println!("aggregator time (outside lagrange) {}.{}", duration.as_secs(), duration.as_millis());
 
         Some(MultiverseSig {
             sigma_prime: sigma_prime,
@@ -244,21 +191,15 @@ pub mod tests {
     use super::*;
     use crate::common::sig_utils;
     use rand::{thread_rng};
-    use std::time::{Duration, Instant};
+    use std::time::{Instant};
 
-    #[test]
-    fn test_correctness_multiverse_sig() {
-
-        let num_parties: usize = 200;
-        let individual_weight: usize = 25;
-        let threshold: f64 = 0.5;
-
+    fn test_multiverse_sig_core(num_parties: usize, individual_weight: usize, threshold: f64) {
         let total_weight = individual_weight * num_parties;
         let weight_threshold = ((total_weight as f64) * threshold) as usize;
 
         let mut rng = thread_rng();
 
-        let crs = sig_utils::test_setup::<50000>(&mut rng);
+        let crs = sig_utils::test_setup::<5>(&mut rng);
         let addr_book = sig_utils::create_addr_book(num_parties, individual_weight);
 
         let dealer = MultiverseParty::new(crs, weight_threshold, total_weight, &addr_book);
@@ -275,7 +216,27 @@ pub mod tests {
 
         let now = Instant::now();
         let aggregate_sig = dealer.aggregate(&output, &partial_sigs).unwrap();
-        println!("{}", now.elapsed().as_secs());
+        let duration = now.elapsed();
+        println!("aggregation time for {} nodes and {} weight: {}.{}",
+            num_parties, individual_weight, duration.as_secs(), duration.as_millis());
         assert_eq!(dealer.verify(msg_to_sign.as_bytes(), &output, &aggregate_sig), true);
+    }
+
+    #[test]
+    fn test_performance_multiverse_sig() {
+        let num_parties: usize = 200;
+        let individual_weight: usize = 60;
+        let threshold: f64 = 0.5;
+
+        test_multiverse_sig_core(num_parties, individual_weight, threshold);
+    }
+
+    #[test]
+    fn test_correctness_multiverse_sig() {
+        let num_parties: usize = 200;
+        let individual_weight: usize = 60;
+        let threshold: f64 = 0.5;
+
+        test_multiverse_sig_core(num_parties, individual_weight, threshold);
     }
 }

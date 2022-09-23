@@ -38,17 +38,22 @@ type Signature struct {
 
 // Verify verifies an eddsa signature using MiMC hash function
 // cf https://en.wikipedia.org/wiki/EdDSA
-func Verify(curve twistededwards.Curve, sigs [NUM_NODES]Signature, msg frontend.Variable, pubKeys [NUM_NODES]PublicKey, hash hash.Hash) error {
+func Verify(
+	curve twistededwards.Curve, 
+	sigs [NUM_NODES]Signature, 
+	msg frontend.Variable, 
+	pubKeys [NUM_NODES]PublicKey, 
+	eddsa_hasher hash.Hash) error {
 
 	for i := 0; i < NUM_NODES; i++ {
-		hash.Reset()
+		eddsa_hasher.Reset()
 		// compute H(R, A, M)
-		hash.Write(sigs[i].R.X)
-		hash.Write(sigs[i].R.Y)
-		hash.Write(pubKeys[i].A.X)
-		hash.Write(pubKeys[i].A.Y)
-		hash.Write(msg)
-		hRAM := hash.Sum()
+		eddsa_hasher.Write(sigs[i].R.X)
+		eddsa_hasher.Write(sigs[i].R.Y)
+		eddsa_hasher.Write(pubKeys[i].A.X)
+		eddsa_hasher.Write(pubKeys[i].A.Y)
+		eddsa_hasher.Write(msg)
+		hRAM := eddsa_hasher.Sum()
 
 		base := twistededwards.Point{
 			X: curve.Params().Base[0],

@@ -266,7 +266,8 @@ pub mod tests {
         let msg_to_sign = "Hello Multiverse";
 
         let mut partial_sigs = Vec::new();
-        for party in 0..num_parties {
+        let online_parties = (((num_parties as f64) * threshold) as usize) + 1;
+        for party in 0..online_parties {
             partial_sigs.push(sign(
                 &universe,
                 party,

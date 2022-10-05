@@ -92,6 +92,7 @@ impl Universe {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::sig_utils;
 
     #[test]
     fn test_universe() {
@@ -103,7 +104,8 @@ mod tests {
         universe.set_threshold(10);
         println!("{}", universe);
 
-        for (party, (lo,hi)) in &universe.get_private_xs_ranges() {
+        for (party, (lo,hi)) in
+            &sig_utils::compute_universe_private_xs_ranges(&universe) {
             println!("{party}: {lo}..{hi}");
         }
     }

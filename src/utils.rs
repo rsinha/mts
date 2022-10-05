@@ -104,6 +104,14 @@ pub fn hash_to_g2(msg: &[u8]) -> G2Projective {
     <G2Projective as HashToCurve<ExpandMsgXmd<sha2::Sha256>>>::hash_to_curve(msg, DOMAIN_G2)
 }
 
+pub fn get_generator_in_g1() -> G1Projective {
+    hash_to_g1(&[0; 32])
+}
+
+pub fn get_generator_in_g2() -> G2Projective {
+    hash_to_g2(&[0; 32])
+}
+
 pub fn commit_in_g1(generator: &G1Projective, value: &Scalar) -> G1Projective {
     generator.mul(value)
 }

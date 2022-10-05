@@ -3,6 +3,7 @@ pub mod sig_utils {
     use ff::*;
     use crate::kzg::*;
     use crate::polynomial::*;
+    use crate::universe::*;
     use std::collections::{BTreeMap};
     use rand::{Rng, rngs::ThreadRng};
     use bls12_381::{Scalar};
@@ -34,20 +35,43 @@ pub mod sig_utils {
         setup(s, MAX_COEFFS)
     }
 
-    /// given a mapping from party id to weights, this function constructs
-    /// a mapping from party id to private ranges
-    pub fn addr_book_to_private_xs_ranges(
-        addr_book: &BTreeMap<PartyId, Weight>) -> BTreeMap<PartyId, (XCoord, XCoord)> {
+    /// constructs a mapping from party id to private ranges
+    pub fn compute_universe_private_xs_ranges(universe: &Universe) ->
+        BTreeMap<PartyId, (XCoord, XCoord)> {
         let mut mapping = BTreeMap::new();
         let mut consumed_weight: usize = 0;
 
-        for (&party, &weight) in addr_book.iter() {
-            let lo = consumed_weight + 1;
-            let hi = consumed_weight + weight;
-            mapping.insert(party, (lo, hi));
+        for party in universe.get_parties_in_canonical_ordering().iter() {
+            let party_weight = universe.get_weight(party);
 
-            consumed_weight += weight;
+            let lo = consumed_weight + 1;
+            let hi = consumed_weight + party_weight;
+            mapping.insert(*party, (lo, hi));
+
+            consumed_weight += party_weight;
         }
         mapping
+    }
+
+    pub fn compute_universe_public_xs(universe: &Universe) -> Vec<Scalar> {
+        let lo = universe.get_total_weight() + 1;
+        let hi = 2*universe.get_total_weight() - universe.get_threshold();
+
+        let xs: Vec<XCoord> = (lo..hi+1).collect();
+
+        xs.iter().map(|&x| Scalar::from(x as u64)).collect()
+    }
+
+    /// constructs a sequence of all public keys in a universe
+    pub fn compute_universe_pub_keys(universe: &Universe) ->
+        Vec<G1Projective> {
+        let mut pubkeys = Vec::new();
+
+        for party in universe.get_parties_in_canonical_ordering().iter() {
+            for party_key in universe.get_pub_keys(party).iter() {
+                pubkeys.push(party_key.clone());
+            }
+        }
+        pubkeys
     }
 }

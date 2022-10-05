@@ -1,3 +1,5 @@
+//taken from https://github.com/proxima-one/kzg
+
 use bls12_381::Scalar;
 //use pairing::group::ff::Field;
 use std::borrow::Borrow;
@@ -181,7 +183,7 @@ impl Polynomial {
         */
         self.clone() * other.clone()
     }
-    
+
 
     pub fn long_division(&self, divisor: &Self) -> (Polynomial, Option<Polynomial>) {
         if self.is_zero() {
@@ -348,7 +350,7 @@ impl Polynomial {
         }
         self
     }
-    
+
 }
 
 pub struct SubProductTree {

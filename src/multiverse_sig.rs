@@ -13,7 +13,7 @@ use crate::common::sig_utils;
 use crate::{XCoord, PartyId, Weight};
 
 pub type MultiversePartialSig = Vec<(XCoord, G2Projective)>;
-pub type MultiverseParams = KZGParams;
+
 
 fn aggregator_xs(total_weight: Weight, threshold: Weight) -> Vec<Scalar> {
     let lo = total_weight + 1;
@@ -45,10 +45,10 @@ pub struct MultiversePublicParams {
 
 //#[derive(Debug, Clone)]
 pub struct MultiverseParty {
-    threshold_weight: Weight,
-    total_weight: Weight,
     crs: KZGParams,
     k: Scalar,
+    threshold_weight: Weight,
+    total_weight: Weight,
     secret_polynomial: Polynomial,
     addr_book_ranges: BTreeMap<PartyId, (XCoord, XCoord)>
 }
@@ -224,8 +224,8 @@ pub mod tests {
 
     #[test]
     fn test_performance_multiverse_sig() {
-        let num_parties: usize = 200;
-        let individual_weight: usize = 60;
+        let num_parties: usize = 10;
+        let individual_weight: usize = 10;
         let threshold: f64 = 0.5;
 
         test_multiverse_sig_core(num_parties, individual_weight, threshold);
@@ -233,8 +233,8 @@ pub mod tests {
 
     #[test]
     fn test_correctness_multiverse_sig() {
-        let num_parties: usize = 200;
-        let individual_weight: usize = 60;
+        let num_parties: usize = 20;
+        let individual_weight: usize = 10;
         let threshold: f64 = 0.5;
 
         test_multiverse_sig_core(num_parties, individual_weight, threshold);

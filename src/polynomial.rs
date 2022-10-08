@@ -315,6 +315,36 @@ impl Polynomial {
         output
     }
 
+    /// computes polynomial L_i(X) for the point x = x_i.
+    pub fn lagrange_polynomial(xs: &[Scalar], i: usize) -> Option<Polynomial> {
+        if i >= xs.len() {
+            return None;
+        }
+
+        //let us compute the numerator first
+        let mut l_i = Polynomial { degree: 0, coeffs: vec![Scalar::one()] };
+        for (j, x_j) in xs.iter().enumerate() {
+            if i != j {
+                let numerator = Polynomial::new_from_coeffs(vec![-x_j, Scalar::one()], 1);
+                l_i = l_i * numerator;
+            }
+        }
+
+        let mut denominator: Scalar = Scalar::one();
+        for (j, x_j) in xs.iter().enumerate() {
+            if i != j {
+                denominator = denominator * (xs[i] - x_j);
+            }
+        }
+        let denominator_poly = Polynomial { degree: 0, coeffs: vec![denominator]};
+
+        let (result, remainder) = l_i.long_division(&denominator_poly);
+        match remainder {
+            None => return Some(result),
+            Some(_) => return None,
+        }
+    }
+
     pub fn lagrange_interpolation(xs: &[Scalar], ys: &[Scalar]) -> Polynomial {
         assert_eq!(xs.len(), ys.len());
 

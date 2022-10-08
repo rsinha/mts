@@ -17,6 +17,11 @@ pub struct MTSUniverseCreationMessage {
     pub blind_commitment: G2Projective,
 }
 
+pub struct MTSUniverseCreationState {
+    pub pk: G1Projective,
+    pub evals: Vec<G1Projective>,
+}
+
 pub struct MTSUniversePublicParams {
     pub evals: Vec<G1Projective>,
     pub blinded_evals: Vec<G1Projective>,
@@ -108,14 +113,24 @@ pub fn publish_pubkeys(
 }
 
 pub fn publish_universe_setup_msg(
-    universe: &Universe) -> MTSUniverseCreationMessage {
-    let (_, evals_0) = compute_universe_public_points(universe);
+    universe: &Universe) -> (MTSUniverseCreationState, MTSUniverseCreationMessage) {
+    let (pk, evals_0) = compute_universe_public_points(universe);
     let (evals_1, com) = blind_points(&evals_0);
-    MTSUniverseCreationMessage { blinded_evals: evals_1, blind_commitment: com }
+    let msg = MTSUniverseCreationMessage {
+        blinded_evals: evals_1,
+        blind_commitment: com
+    };
+    let state = MTSUniverseCreationState {
+        pk: pk,
+        evals: evals_0,
+    };
+
+    (state, msg)
 }
 
 pub fn compute_universe_pp(
     universe: &Universe,
+    state: &MTSUniverseCreationState,
     msgs: &[MTSUniverseCreationMessage]) -> (MTSUniversePublicParams, MTSUniverseVerificationKey) {
     let w = universe.get_total_weight();
     let t = universe.get_threshold();
@@ -123,8 +138,6 @@ pub fn compute_universe_pp(
     let one_g1 = utils::commit_in_g1(&utils::get_generator_in_g1(), &Scalar::from(0));
     let one_g2 = utils::commit_in_g2(&utils::get_generator_in_g2(), &Scalar::from(0));
 
-
-    let (pk, evals_0) = compute_universe_public_points(universe);
     let mut evals_1: Vec<G1Projective> = Vec::new();
     for i in 0..(w - t) {
         let evals_1_i = msgs.iter().fold(one_g1, |sum, m| sum.add(m.blinded_evals.get(i).unwrap()));
@@ -132,8 +145,8 @@ pub fn compute_universe_pp(
     }
     let blind_com = msgs.iter().fold(one_g2, |sum, m| sum.add(m.blind_commitment));
 
-    let pp = MTSUniversePublicParams { evals: evals_0, blinded_evals: evals_1 };
-    let vk = MTSUniverseVerificationKey { vk_0: pk, vk_1: blind_com };
+    let pp = MTSUniversePublicParams { evals: state.evals.clone(), blinded_evals: evals_1 };
+    let vk = MTSUniverseVerificationKey { vk_0: state.pk.clone(), vk_1: blind_com };
 
     (pp, vk)
 }
@@ -257,11 +270,25 @@ pub mod tests {
 
 
         let mut setup_msgs = Vec::new();
+        let mut setup_state = MTSUniverseCreationState {
+            pk: utils::get_generator_in_g1(),
+            evals: Vec::new()
+        };
         for party in 0..num_parties {
-            setup_msgs.push(publish_universe_setup_msg(&universe))
+            let now = Instant::now();
+            let (state, msg) = publish_universe_setup_msg(&universe);
+            setup_state = state;
+            setup_msgs.push(msg);
+            let duration = now.elapsed();
+            println!("publish_universe_setup_msg time for {} nodes and {} weight: {}.{}",
+                num_parties, individual_weight, duration.as_secs(), duration.as_millis());
         }
 
-        let (pp, vk) = compute_universe_pp(&universe, setup_msgs.as_slice());
+        let now = Instant::now();
+        let (pp, vk) = compute_universe_pp(&universe, &setup_state, setup_msgs.as_slice());
+        let duration = now.elapsed();
+        println!("compute_universe_pp time for {} nodes and {} weight: {}.{}",
+                num_parties, individual_weight, duration.as_secs(), duration.as_millis());
 
         let msg_to_sign = "Hello Multiverse";
 
@@ -286,8 +313,8 @@ pub mod tests {
 
     #[test]
     fn test_correctness_mts() {
-        let num_parties: usize = 10;
-        let individual_weight: usize = 3;
+        let num_parties: usize = 5;
+        let individual_weight: usize = 16;
         let threshold: f64 = 0.5;
 
         test_multiverse_sig_core(num_parties, individual_weight, threshold);
